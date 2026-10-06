@@ -1,0 +1,352 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Fly avatar preview</title>
+<style>
+  :root { --bg: #0d1117; --panel: #161b22; --text: #e6edf3; --dim: #8b949e; --accent: #f0883e; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font: 14px/1.4 -apple-system, "Segoe UI", sans-serif; }
+  #stage { position: fixed; inset: 0; }
+  .bar { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+  .bar button { background: var(--panel); color: var(--text); border: 1px solid #30363d; border-radius: 8px; padding: 10px 14px; font-size: 14px; cursor: pointer; }
+  .bar button:hover { border-color: var(--accent); }
+  .bar button.on { border-color: var(--accent); color: var(--accent); }
+  .info { position: fixed; top: 16px; left: 16px; max-width: 420px; color: var(--dim); font-size: 12.5px; }
+  .info strong { color: var(--text); }
+  .tempo { display: flex; align-items: center; gap: 6px; background: var(--panel); border: 1px solid #30363d; border-radius: 8px; padding: 6px 10px; color: var(--dim); }
+  .tempo output { color: var(--text); min-width: 28px; font-variant-numeric: tabular-nums; }
+  .eye { position: fixed; top: 16px; right: 16px; width: 380px; background: rgba(22,27,34,0.92); border: 1px solid #30363d; border-radius: 10px; padding: 10px 12px; }
+  .eye h2 { margin: 0 0 6px; font-size: 13px; font-weight: 600; }
+  .eye canvas { display: block; width: 100%; }
+  .eye p { margin: 6px 0 0; font-size: 11px; color: var(--dim); }
+  .credit { position: fixed; right: 16px; bottom: 16px; color: var(--dim); font-size: 11px; max-width: 300px; text-align: right; }
+</style>
+</head>
+<body>
+<div id="stage"></div>
+<div class="bar" id="bar"></div>
+<div class="eye"><h2>Fly's-eye view</h2>
+<canvas id="eye" width="760" height="560"></canvas></div>
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+               "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/" } }
+</script>
+<script type="module">
+import * as THREE from "three";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+
+const data = await (await fetch("fly.json")).json();
+const decode = (b64, Type) => { const s = atob(b64); const u = new Uint8Array(s.length);
+  for (let i = 0; i < s.length; i++) u[i] = s.charCodeAt(i); return new Type(u.buffer); };
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(devicePixelRatio);
+renderer.shadowMap.enabled = true;
+document.getElementById("stage").appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0d1117);
+const camera = new THREE.PerspectiveCamera(35, 1, 0.01, 50);
+// Behind the fly (it faces +x), slightly to its right (+z here = fly's right) and above, so the fly's
+// left and right are the screen's left and right.
+camera.position.set(-0.95, 0.52, 0.16);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(0.05, 0.2, 0);
+controls.enableDamping = true;
+
+scene.add(new THREE.HemisphereLight(0xdde8ff, 0x202530, 1.6));
+const sun = new THREE.DirectionalLight(0xffffff, 2.2);
+sun.position.set(1, 2, 1.2); sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+Object.assign(sun.shadow.camera, { left: -1, right: 1, top: 1, bottom: -1 });
+scene.add(sun);
+const floor = new THREE.Mesh(new THREE.CircleGeometry(2, 64), new THREE.MeshStandardMaterial({ color: 0x1f2937, roughness: 0.9 }));
+floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
+const grid = new THREE.PolarGridHelper(1.2, 8, 6, 64, 0x30363d, 0x30363d); grid.position.y = 0.001; scene.add(grid);
+
+// MuJoCo is z-up; three.js is y-up.
+const fly = new THREE.Group(); fly.rotation.x = -Math.PI / 2; scene.add(fly);
+const geometries = data.meshes.map((mesh) => {
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.BufferAttribute(decode(mesh.positions, Float32Array), 3));
+  g.setIndex(new THREE.BufferAttribute(decode(mesh.indices, Uint32Array), 1));
+  g.computeVertexNormals();
+  return g;
+});
+const parts = data.geoms.map((geom) => {
+  const [r, g, b, a] = geom.rgba;
+  const mat = new THREE.MeshStandardMaterial({ color: new THREE.Color(r, g, b), roughness: 0.55, metalness: 0.05,
+    transparent: a < 1, opacity: a, side: THREE.DoubleSide, depthWrite: a >= 1 });
+  const mesh = new THREE.Mesh(geometries[geom.mesh], mat);
+  mesh.castShadow = a >= 1;
+  fly.add(mesh);
+  return mesh;
+});
+
+// A pose = the body's (thorax) world transform + every part's transform in
+// the body frame. Animating the two separately makes the fly rotate as one
+// rigid body (e.g. flipping over) instead of each part cutting straight
+// through the middle on its own path.
+const vec = (r) => new THREE.Vector3(r[0], r[1], r[2]);
+const quat = (r) => new THREE.Quaternion(r[4], r[5], r[6], r[3]);  // MuJoCo quats are w,x,y,z
+function poseState(name) {
+  const root = { p: vec(data.roots[name]), q: quat(data.roots[name]) };
+  const inv = root.q.clone().invert();
+  const parts = data.poses[name].map((r) => ({
+    p: vec(r).sub(root.p).applyQuaternion(inv),
+    q: inv.clone().multiply(quat(r)),
+  }));
+  return { root, parts };
+}
+const POSES = Object.fromEntries(Object.keys(data.poses).map((n) => [n, poseState(n)]));
+const clone = (st) => ({ root: { p: st.root.p.clone(), q: st.root.q.clone() },
+                         parts: st.parts.map((s) => ({ p: s.p.clone(), q: s.q.clone() })) });
+let current = clone(POSES.rest);
+function show(st) {
+  st.parts.forEach((s, i) => {
+    parts[i].position.copy(s.p).applyQuaternion(st.root.q).add(st.root.p);
+    parts[i].quaternion.copy(st.root.q).multiply(s.q);
+  });
+}
+function blend(a, b, k) {
+  return { root: { p: a.root.p.clone().lerp(b.root.p, k), q: a.root.q.clone().slerp(b.root.q, k) },
+           parts: a.parts.map((s, i) => ({ p: s.p.clone().lerp(b.parts[i].p, k), q: s.q.clone().slerp(b.parts[i].q, k) })) };
+}
+show(current);
+
+// A sequence is a list of [pose, beats]; each step eases from the current
+// pose, so a new note interrupts the previous move instead of waiting for it.
+// Durations scale with the song's BPM: a move finishes within one beat.
+let bpm = 150;
+const beatMs = () => 60000 / bpm;
+let queue = [], step = null;
+const ease = (t) => t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+function play(key) { queue = SEQUENCES[key].map(([pose, beats]) => [pose, beats * beatMs()]); step = null; }
+const SEQUENCES = {
+  up:    [["takeoff", 0.28], ["takeoff", 0.12], ["rest", 0.45]],
+  down:  [["crouch", 0.22], ["crouch", 0.15], ["rest", 0.38]],
+  left:  [["dodge_left", 0.22], ["dodge_left", 0.12], ["rest", 0.38]],
+  right: [["dodge_right", 0.22], ["dodge_right", 0.12], ["rest", 0.38]],
+  miss:  [["tumble", 0.3], ["flip_a", 0.3], ["flip_b", 0.15], ["flip_a", 0.15], ["flip_b", 0.15],
+          ["flip_a", 0.15], ["tumble", 0.35], ["rest", 0.35]],
+};
+const BUTTONS = [["left", "← threat left"], ["up", "↑ threat above"], ["down", "↓ threat below"], ["right", "→ threat right"], ["miss", "✗ miss"]];
+const bar = document.getElementById("bar");
+for (const [key, label] of BUTTONS) {
+  const b = document.createElement("button"); b.textContent = label;
+  b.onclick = () => (THREAT_FOR[key] ? launchThreat(THREAT_FOR[key]) : play(key)); bar.appendChild(b);
+}
+addEventListener("keydown", (e) => {
+  const map = { ArrowLeft: "left", ArrowRight: "right", ArrowUp: "up", ArrowDown: "down", x: "miss", X: "miss" };
+  if (map[e.key]) { e.preventDefault(); THREAT_FOR[map[e.key]] ? launchThreat(THREAT_FOR[map[e.key]]) : play(map[e.key]); }
+});
+
+// Tempo controls and a demo stream of random quarter-note threats.
+const tempo = document.createElement("label");
+tempo.className = "tempo";
+tempo.innerHTML = 'BPM <input id="bpm" type="range" min="60" max="240" step="5" value="150"> <output id="bpm-out">150</output>';
+bar.appendChild(tempo);
+document.getElementById("bpm").addEventListener("input", (e) => {
+  bpm = Number(e.target.value); document.getElementById("bpm-out").textContent = bpm;
+  if (streamTimer) { stopStream(); startStream(); }
+});
+let streamTimer = null;
+const streamBtn = document.createElement("button");
+streamBtn.textContent = "▶ demo stream (quarters)";
+function startStream() {
+  const dirs = ["left", "up", "down", "right"];
+  streamTimer = setInterval(() => launchThreat(THREAT_FOR[dirs[Math.floor(Math.random() * 4)]]), beatMs());
+  streamBtn.classList.add("on"); streamBtn.textContent = "■ stop stream";
+}
+function stopStream() { clearInterval(streamTimer); streamTimer = null; streamBtn.classList.remove("on"); streamBtn.textContent = "▶ demo stream (quarters)"; }
+streamBtn.onclick = () => (streamTimer ? stopStream() : startStream());
+bar.appendChild(streamBtn);
+
+// ---------- fly's-eye panel: replays the experiment's model output ----------
+const eye = await (await fetch("eye.json")).json();
+const ARROW_KEY = { LEFT: "left", DOWN: "down", UP: "up", RIGHT: "right" };
+const GLYPH = { LEFT: "←", DOWN: "↓", UP: "↑", RIGHT: "→" };
+const ec = document.getElementById("eye"), ex = ec.getContext("2d");
+let wiring = "real", threat = null;
+// Fixed pseudo-random horizontal spread per detector (illustrative only).
+const det = eye.detectors.side.map((side, i) => ({ side, elev: eye.detectors.elev[i], lc4: eye.detectors.type[i] === "LC4",
+  u: ((i * 0.6180339887) % 1) * 0.84 + 0.08 }));
+// One panoramic strip of the fly's visual field: left eye on the left half,
+// right eye on the right half, the seam in the middle is straight ahead.
+// The model only knows which eye sees a threat and at what elevation, so a
+// side threat is drawn toward that eye's outer edge and up/down threats span
+// both eyes; horizontal placement inside an eye stays illustrative.
+const PX = 20, PW = 720, EY = 34, EH = 260, HALF = PW / 2;
+const EYE_X = { L: PX, R: PX + HALF };
+// [x as a fraction of the strip, elevation 0 = top, horizontal stretch]
+const threatShape = { LEFT: [0.2, 0.5, 1], RIGHT: [0.8, 0.5, 1], UP: [0.5, 0.12, 2.4], DOWN: [0.5, 0.88, 2.4] };
+
+// Each threat replays a randomly chosen noisy trial of the model (different detector
+// subset, amplitudes and input noise every time), not one fixed run.
+function sendThreat(arrow) {
+  const trials = eye.arrows[arrow];
+  threat = { arrow, trial: trials[Math.floor(Math.random() * trials.length)], t0: performance.now(), decided: null, checked: -1 };
+}
+function drawEye(now) {
+  ex.clearRect(0, 0, ec.width, ec.height);
+  const n = eye.profile.length;
+  const idx = threat ? Math.min(n - 1, Math.floor((performance.now() - threat.t0) / eye.step_ms)) : -1;
+  const prof = idx >= 0 ? eye.profile[idx] : 0;
+  const weights = threat ? threat.trial.weights : null;
+  ex.fillStyle = "#0d1117"; ex.strokeStyle = "#30363d"; ex.lineWidth = 2;
+  ex.beginPath(); ex.roundRect(PX, EY, PW, EH, 18); ex.fill(); ex.stroke();
+  ex.strokeStyle = "#21262d"; ex.setLineDash([6, 6]);
+  ex.beginPath(); ex.moveTo(PX + 10, EY + EH / 2); ex.lineTo(PX + PW - 10, EY + EH / 2); ex.stroke();  // horizon
+  ex.beginPath(); ex.moveTo(PX + HALF, EY + 8); ex.lineTo(PX + HALF, EY + EH - 8); ex.stroke();       // straight ahead
+  ex.setLineDash([]);
+  if (threat && prof > 0) {
+    const [fx, fy, stretch] = threatShape[threat.arrow];
+    const cx = PX + fx * PW, cy = EY + fy * EH, r = 10 + prof * 110;
+    ex.save(); ex.translate(cx, cy); ex.scale(stretch, 1);
+    const g = ex.createRadialGradient(0, 0, 0, 0, 0, r);
+    g.addColorStop(0, "rgba(230,237,243,0.7)"); g.addColorStop(1, "rgba(230,237,243,0)");  // the looming object
+    ex.fillStyle = g; ex.beginPath(); ex.arc(0, 0, r, 0, 2 * Math.PI); ex.fill(); ex.restore();
+  }
+  det.forEach((d, i) => {
+    const x0 = EYE_X[d.side]; if (x0 === undefined) return;
+    const a = weights ? weights[i] * prof : 0;
+    // Same red as the 3D fly's compound eyes (#cc0701): these are its eye's looming detectors.
+    ex.fillStyle = a > 0.05 ? `rgba(255,${30 + Math.round(70 * a)},${20 + Math.round(30 * a)},${0.6 + 0.4 * a})` : "rgba(204,7,1,0.22)";
+    ex.beginPath(); ex.arc(x0 + 10 + d.u * (HALF - 20), EY + 12 + d.elev * (EH - 24), 3 + 3 * a, 0, 2 * Math.PI); ex.fill();
+  });
+  // Side markers: left eye / right eye.
+  ex.fillStyle = "#8b949e"; ex.font = "600 26px sans-serif"; ex.textBaseline = "middle";
+  ex.textAlign = "left"; ex.fillText("L", PX + 12, EY + EH / 2);
+  ex.textAlign = "right"; ex.fillText("R", PX + PW - 12, EY + EH / 2);
+  ex.textAlign = "left"; ex.textBaseline = "alphabetic";
+  // Readout bars, normalised to each arrow's calibrated peak; the line is the press threshold.
+  const ev = threat && idx >= 0 ? threat.trial.evidence[wiring][idx] : [0, 0, 0, 0];
+  const BY = 330, BH = 170, BW = 120, top = 1.2;
+  eye.columns.forEach((col, k) => {
+    const x = 40 + k * 180, h = Math.min(ev[k], top) / top * BH;
+    // The fly's choice lights up its box in one neutral colour, right or wrong:
+    // the panel shows the decision; whether it was correct is the fly's (and the game's) job.
+    const chosen = threat && threat.decided === col;
+    ex.fillStyle = chosen ? "rgba(121,192,255,0.22)" : "#21262d"; ex.fillRect(x, BY, BW, BH);
+    ex.fillStyle = chosen ? "#79c0ff" : "#58a6ff";
+    ex.fillRect(x, BY + BH - h, BW, h);
+    if (chosen) {
+      ex.save(); ex.shadowColor = "#79c0ff"; ex.shadowBlur = 22;
+      ex.strokeStyle = "#f0f6fc"; ex.lineWidth = 4; ex.strokeRect(x, BY, BW, BH); ex.restore();
+    }
+    ex.fillStyle = chosen ? "#f0f6fc" : "#8b949e"; ex.font = (chosen ? "bold " : "") + "34px sans-serif"; ex.textAlign = "center";
+    ex.fillText(GLYPH[col], x + BW / 2, BY + BH + 40); ex.textAlign = "left";
+  });
+  const ty = BY + BH - eye.threshold / top * BH;
+  ex.strokeStyle = "#f0883e"; ex.setLineDash([8, 6]); ex.lineWidth = 2;
+  ex.beginPath(); ex.moveTo(24, ty); ex.lineTo(ec.width - 52, ty); ex.stroke(); ex.setLineDash([]);
+  ex.fillStyle = "#f0883e"; ex.font = "italic 28px serif"; ex.textBaseline = "middle";
+  ex.fillText("θ", ec.width - 44, ty); ex.textBaseline = "alphabetic";  // decision threshold
+  // Decision: at the first step where any bar crosses the threshold, the strongest
+  // one is pressed. Every step since the last frame is checked, so a slow frame
+  // rate can't skip the crossing.
+  if (threat && !threat.decided) {
+    const trace = threat.trial.evidence[wiring];
+    for (let k = threat.checked + 1; k <= idx && !threat.decided; k++) {
+      const m = Math.max(...trace[k]);
+      if (m >= eye.threshold) threat.decided = eye.columns[trace[k].indexOf(m)];
+    }
+    threat.checked = Math.max(threat.checked, idx);
+    if (threat.decided) { window.__lastDecision = threat.decided; play(threat.decided === threat.arrow ? ARROW_KEY[threat.decided] : "miss"); }
+    else if (idx === n - 1) { threat.decided = "none"; window.__lastDecision = "none"; play("miss"); }
+  }
+  if (threat && performance.now() - threat.t0 > n * eye.step_ms + 700) threat = null;
+}
+const THREAT_FOR = { left: "LEFT", right: "RIGHT", up: "UP", down: "DOWN" };
+
+// ---------- 3D threats: StepMania-style arrows flying at the fly ----------
+// Each arrow flies at constant speed and reaches the fly exactly when the panel's
+// looming threat "collides" - constant-speed approach is what a looming stimulus is.
+// Three.js world: the fly faces +x, its left is -z, up is +y.
+const ARROW_PATHS = {   // all come from ahead, like notes scrolling toward the player
+  LEFT:  { from: [2.2, 0.18, -0.6], to: [0.12, 0.16, -0.12], spin: -Math.PI / 2 },  // front-left: left eye
+  RIGHT: { from: [2.2, 0.18, 0.6],  to: [0.12, 0.16, 0.12],  spin: Math.PI / 2 },   // front-right: right eye
+  UP:    { from: [2.2, 0.8, 0.0],   to: [0.12, 0.3, 0.0],    spin: Math.PI },       // front, above the horizon
+  DOWN:  { from: [2.2, 0.04, 0.0],  to: [0.16, 0.05, 0.0],   spin: 0 },             // front, low: below the horizon
+};
+// StepMania 5 default dance noteskin (same look as OutFox): 8 frames of a DOWN arrow, one colour per beat
+// subdivision (red 4ths, blue 8ths, green 12ths, yellow 16ths, ...), like the game screen.
+const noteTexture = new THREE.TextureLoader().load("assets/stepmania5_arrow_1x8.png");
+noteTexture.colorSpace = THREE.SRGBColorSpace;
+function noteFrame(frame) {
+  const t = noteTexture.clone();
+  t.repeat.set(1, 1 / 8);
+  t.offset.set(0, 1 - (frame + 1) / 8);
+  t.needsUpdate = true;
+  return t;
+}
+const NOTE_FRAMES = Array.from({ length: 8 }, (_, k) => noteFrame(k));
+const arrowGeom = new THREE.PlaneGeometry(1, 1);
+const ARROW_SIZE = 0.17;
+const flying = [];
+
+function launchThreat(arrow) {
+  const approachMs = Math.max(beatMs(), 450);
+  const leadMs = eye.collision_index * eye.step_ms;           // panel threat starts this long before collision
+  // Quarter notes are frame 0 (red) in StepMania's colouring; the demo stream sends quarters.
+  const mat = new THREE.MeshBasicMaterial({ map: NOTE_FRAMES[0], transparent: true, depthWrite: false });
+  const mesh = new THREE.Mesh(arrowGeom, mat);
+  mesh.scale.setScalar(ARROW_SIZE);
+  scene.add(mesh);
+  const path = ARROW_PATHS[arrow];
+  const item = { arrow, mesh, mat, path, t0: performance.now(), approachMs, threat: null };
+  flying.push(item);
+  setTimeout(() => { sendThreat(arrow); item.threat = threat; }, Math.max(0, approachMs - leadMs));
+}
+
+const _a = new THREE.Vector3(), _b = new THREE.Vector3(), _spin = new THREE.Quaternion(), _z = new THREE.Vector3(0, 0, 1);
+function updateArrows() {
+  const now = performance.now();
+  for (let i = flying.length - 1; i >= 0; i--) {
+    const f = flying[i];
+    const t = (now - f.t0) / f.approachMs;                    // 0 at launch, 1 at collision
+    _a.fromArray(f.path.from); _b.fromArray(f.path.to);
+    const dodged = f.threat && f.threat.decided && f.threat.decided === f.arrow;
+    let alpha = 1, scale = ARROW_SIZE;
+    if (t <= 1) {
+      f.mesh.position.lerpVectors(_a, _b, t);
+    } else if (dodged) {                                       // the fly moved: the arrow flies on past it
+      f.mesh.position.lerpVectors(_a, _b, t);
+      alpha = Math.max(0, 1 - (t - 1) * 3);
+    } else {                                                   // wrong or no decision: it hits and bursts
+      const k = (t - 1) * 5;
+      f.mesh.position.copy(_b);
+      scale = ARROW_SIZE * (1 + 1.5 * k);
+      alpha = Math.max(0, 1 - k);
+    }
+    // Face the camera like a note on screen, rotated to the arrow's direction.
+    f.mesh.quaternion.copy(camera.quaternion).multiply(_spin.setFromAxisAngle(_z, f.path.spin));
+    f.mesh.scale.setScalar(scale);
+    f.mat.opacity = alpha;
+    if (alpha <= 0 || t > 3) { scene.remove(f.mesh); f.mat.dispose(); flying.splice(i, 1); }
+  }
+}
+
+function resize() { renderer.setSize(innerWidth, innerHeight); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); }
+addEventListener("resize", resize); resize();
+
+renderer.setAnimationLoop((now) => {
+  if (!step && queue.length) {
+    const [name, ms] = queue.shift();
+    step = { from: clone(current), to: POSES[name], t0: now, ms };
+  }
+  if (step) {
+    const t = Math.min(1, (now - step.t0) / step.ms), k = ease(t);
+    current = blend(step.from, step.to, k);
+    show(current);
+    if (t >= 1) step = null;
+  }
+  drawEye(now);
+  updateArrows();
+  controls.update();
+  renderer.render(scene, camera);
+});
+window.__ready = true;
+</script>
+</body>
+</html>

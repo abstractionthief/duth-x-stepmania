@@ -1,0 +1,119 @@
+[
+  {
+    "bpm": 100,
+    "stream": {
+      "hit_rate": 1.0,
+      "score": 1.0,
+      "extra_presses": 0
+    },
+    "jacks": {
+      "hit_rate": 1.0,
+      "score": 1.0,
+      "extra_presses": 0
+    }
+  },
+  {
+    "bpm": 150,
+    "stream": {
+      "hit_rate": 1.0,
+      "score": 1.0,
+      "extra_presses": 0
+    },
+    "jacks": {
+      "hit_rate": 1.0,
+      "score": 1.0,
+      "extra_presses": 0
+    }
+  },
+  {
+    "bpm": 200,
+    "stream": {
+      "hit_rate": 1.0,
+      "score": 1.0,
+      "extra_presses": 0
+    },
+    "jacks": {
+      "hit_rate": 1.0,
+      "score": 0.9895833333333334,
+      "extra_presses": 0
+    }
+  },
+  {
+    "bpm": 250,
+    "stream": {
+      "hit_rate": 1.0,
+      "score": 0.9791666666666666,
+      "extra_presses": 0
+    },
+    "jacks": {
+      "hit_rate": 0.78125,
+      "score": -0.08333333333333333,
+      "extra_presses": 0
+    }
+  },
+  {
+    "bpm": 300,
+    "stream": {
+      "hit_rate": 0.984375,
+      "score": 0.9322916666666666,
+      "extra_presses": 0
+    },
+    "jacks": {
+      "hit_rate": 0.546875,
+      "score": -1.1770833333333333,
+      "extra_presses": 1
+    }
+  },
+  {
+    "bpm": 400,
+    "stream": {
+      "hit_rate": 0.9375,
+      "score": 0.625,
+      "extra_presses": 0
+    },
+    "jacks": {
+      "hit_rate": 0.46875,
+      "score": -1.046875,
+      "extra_presses": 0
+    }
+  },
+  {
+    "bpm": 500,
+    "stream": {
+      "hit_rate": 0.78125,
+      "score": -0.03125,
+      "extra_presses": 0
+    },
+    "jacks": {
+      "hit_rate": 0.453125,
+      "score": -1.3229166666666667,
+      "extra_presses": 0
+    }
+  },
+  {
+    "bpm": 600,
+    "stream": {
+      "hit_rate": 0.609375,
+      "score": -0.9739583333333334,
+      "extra_presses": 0
+    },
+    "jacks": {
+      "hit_rate": 0.421875,
+      "score": -1.421875,
+      "extra_presses": 0
+    }
+  },
+  {
+    "bpm": 800,
+    "stream": {
+      "hit_rate": 0.4375,
+      "score": -1.625,
+      "extra_presses": 0
+    },
+    "jacks": {
+      "hit_rate": 0.40625,
+      "score": -1.5625,
+      "extra_presses": 0
+    }
+  }
+]

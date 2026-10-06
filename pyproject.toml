@@ -1,0 +1,16 @@
+[project]
+name = "duth-x-stepmania"
+version = "0.1.0"
+description = "A connectome-derived fly escape circuit as StepMania's second player"
+requires-python = ">=3.11"
+dependencies = ["numpy", "scipy"]
+
+[project.optional-dependencies]
+# outfox/inject_keys.py: synthetic macOS key presses for Player 2
+live = ["pyobjc-framework-Quartz", "pyobjc-framework-ApplicationServices"]
+
+[dependency-groups]
+dev = ["pytest>=8"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

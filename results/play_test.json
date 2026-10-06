@@ -1,0 +1,152 @@
+[
+  {
+    "difficulty": "Beginner",
+    "meter": 1,
+    "notes": 5,
+    "holds_or_rolls": 0,
+    "cancelling_jumps": 0,
+    "real": {
+      "counts": {
+        "Marvelous": 5,
+        "Perfect": 0,
+        "Great": 0,
+        "Good": 0,
+        "Boo": 0,
+        "Miss": 0
+      },
+      "extra_presses": 0,
+      "hit_rate": 1.0,
+      "score": 1.0
+    },
+    "rewired_mean": {
+      "hit_rate": 0.4666666666666666,
+      "score": -1.1777777777777778,
+      "extra_presses": 5.0
+    }
+  },
+  {
+    "difficulty": "Easy",
+    "meter": 2,
+    "notes": 9,
+    "holds_or_rolls": 0,
+    "cancelling_jumps": 0,
+    "real": {
+      "counts": {
+        "Marvelous": 9,
+        "Perfect": 0,
+        "Great": 0,
+        "Good": 0,
+        "Boo": 0,
+        "Miss": 0
+      },
+      "extra_presses": 0,
+      "hit_rate": 1.0,
+      "score": 1.0
+    },
+    "rewired_mean": {
+      "hit_rate": 0.3703703703703704,
+      "score": -1.5555555555555554,
+      "extra_presses": 12.0
+    }
+  },
+  {
+    "difficulty": "Medium",
+    "meter": 4,
+    "notes": 17,
+    "holds_or_rolls": 0,
+    "cancelling_jumps": 0,
+    "real": {
+      "counts": {
+        "Marvelous": 17,
+        "Perfect": 0,
+        "Great": 0,
+        "Good": 0,
+        "Boo": 0,
+        "Miss": 0
+      },
+      "extra_presses": 0,
+      "hit_rate": 1.0,
+      "score": 1.0
+    },
+    "rewired_mean": {
+      "hit_rate": 0.411764705882353,
+      "score": -1.5163398692810457,
+      "extra_presses": 21.0
+    }
+  },
+  {
+    "difficulty": "Hard",
+    "meter": 6,
+    "notes": 25,
+    "holds_or_rolls": 16,
+    "cancelling_jumps": 2,
+    "real": {
+      "counts": {
+        "Marvelous": 21,
+        "Perfect": 0,
+        "Great": 0,
+        "Good": 0,
+        "Boo": 0,
+        "Miss": 4
+      },
+      "extra_presses": 0,
+      "hit_rate": 0.84,
+      "score": 0.41333333333333333
+    },
+    "rewired_mean": {
+      "hit_rate": 0.3466666666666667,
+      "score": -1.662222222222222,
+      "extra_presses": 20.0
+    }
+  },
+  {
+    "difficulty": "Challenge",
+    "meter": 10,
+    "notes": 61,
+    "holds_or_rolls": 0,
+    "cancelling_jumps": 2,
+    "real": {
+      "counts": {
+        "Marvelous": 56,
+        "Perfect": 0,
+        "Great": 1,
+        "Good": 0,
+        "Boo": 0,
+        "Miss": 4
+      },
+      "extra_presses": 0,
+      "hit_rate": 0.9344262295081968,
+      "score": 0.7486338797814208
+    },
+    "rewired_mean": {
+      "hit_rate": 0.453551912568306,
+      "score": -1.2258652094717668,
+      "extra_presses": 59.333333333333336
+    }
+  },
+  {
+    "difficulty": "Edit",
+    "meter": 13,
+    "notes": 152,
+    "holds_or_rolls": 0,
+    "cancelling_jumps": 0,
+    "real": {
+      "counts": {
+        "Marvelous": 138,
+        "Perfect": 7,
+        "Great": 3,
+        "Good": 0,
+        "Boo": 0,
+        "Miss": 4
+      },
+      "extra_presses": 0,
+      "hit_rate": 0.9736842105263158,
+      "score": 0.875
+    },
+    "rewired_mean": {
+      "hit_rate": 0.40131578947368424,
+      "score": -1.4671052631578947,
+      "extra_presses": 54.333333333333336
+    }
+  }
+]
